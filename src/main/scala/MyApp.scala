@@ -28,7 +28,7 @@ class StockGenerator(symbol: String, sigma: Double) extends SourceFunction[Stock
     while (!canceled) {
       price = price + Random.nextGaussian * sigma
       sourceContext.collect(StockPrice(symbol, price))
-      //Thread.sleep(1)
+      Thread.sleep(1000)
     }
   }
 }
@@ -55,7 +55,8 @@ object MyApp extends App {
   def run(): Unit = {
     val cliParams: ParameterTool = ParameterTool.fromArgs(args)
     val productionMode = cliParams.getBoolean("productionMode", true)
-    val checkpointPath = "file:///d:/temp/checkpoint-data"
+    val checkpointPath = "file:///" + System.getProperty("java.io.tmpdir") + "checkpoint"
+    print("checkpoint folder", checkpointPath)
     val env =
       if (productionMode) {
         StreamExecutionEnvironment.getExecutionEnvironment
@@ -63,7 +64,7 @@ object MyApp extends App {
       else {
         val conf = new Configuration()
         conf.setString("state.checkpoints.dir", checkpointPath)
-        conf.setInteger("state.checkpoints.num-retained", 2)
+        conf.setInteger("state.checkpoints.num-retained", 4)
         StreamExecutionEnvironment.createLocalEnvironment(4, conf)
       }
     env.getCheckpointConfig.setCheckpointingMode(CheckpointingMode.AT_LEAST_ONCE)
