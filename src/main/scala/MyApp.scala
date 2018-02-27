@@ -1,18 +1,18 @@
 import org.apache.flink.api.common.functions.RichMapFunction
 import org.apache.flink.api.common.restartstrategy.RestartStrategies
-import org.apache.flink.api.common.state.{ValueState, ValueStateDescriptor}
+import org.apache.flink.api.common.state.{ListState, ListStateDescriptor}
 import org.apache.flink.api.common.time.Time
 import org.apache.flink.api.common.typeinfo.{TypeHint, TypeInformation}
 import org.apache.flink.api.java.utils.ParameterTool
 import org.apache.flink.configuration.Configuration
-import org.apache.flink.contrib.streaming.state.{RocksDBStateBackend, RocksDBValueState}
+import org.apache.flink.contrib.streaming.state.RocksDBStateBackend
 import org.apache.flink.runtime.state.filesystem.FsStateBackend
 import org.apache.flink.streaming.api.CheckpointingMode
+import org.apache.flink.streaming.api.environment.CheckpointConfig
 import org.apache.flink.streaming.api.functions.source.SourceFunction
+import org.apache.flink.streaming.api.scala.{StreamExecutionEnvironment, _}
 
 import scala.util.Random
-import org.apache.flink.streaming.api.environment.CheckpointConfig
-import org.apache.flink.streaming.api.scala.{StreamExecutionEnvironment, _}
 
 case class StockPrice(symbol: String, price: Double)
 
@@ -28,27 +28,26 @@ class StockGenerator(symbol: String, sigma: Double) extends SourceFunction[Stock
     while (!canceled) {
       price = price + Random.nextGaussian * sigma
       sourceContext.collect(StockPrice(symbol, price))
-      Thread.sleep(5000)
+      //Thread.sleep(1)
     }
   }
 }
 
-class TestMapFunction extends RichMapFunction[StockPrice, (String, Int)] {
-  var state: ValueState[Int] = _
+class TestMapFunction extends RichMapFunction[StockPrice, (String, Double)] {
+  var state: ListState[Double] = _
 
   override def open(parameters: Configuration): Unit = {
     super.open(parameters)
-    val descriptor = new ValueStateDescriptor[Int](
+    val descriptor = new ListStateDescriptor[Double](
       "sum",
-      TypeInformation.of(new TypeHint[Int]{}))
-    state = getRuntimeContext.getState(descriptor)
+      TypeInformation.of(new TypeHint[Double]{}))
+    state = getRuntimeContext.getListState(descriptor)
   }
 
-  override def map(in: StockPrice): (String, Int) = {
-    val sum = state.value() + 1
-    state.update(sum)
+  override def map(in: StockPrice): (String, Double) = {
+    state.add(in.price)
     //Thread.sleep(2000)
-    (in.symbol, sum)
+    (in.symbol, in.price)
   }
 }
 
@@ -64,6 +63,7 @@ object MyApp extends App {
       else {
         val conf = new Configuration()
         conf.setString("state.checkpoints.dir", checkpointPath)
+        conf.setInteger("state.checkpoints.num-retained", 2)
         StreamExecutionEnvironment.createLocalEnvironment(4, conf)
       }
     env.getCheckpointConfig.setCheckpointingMode(CheckpointingMode.AT_LEAST_ONCE)
@@ -71,8 +71,8 @@ object MyApp extends App {
     env.getCheckpointConfig.setCheckpointTimeout(Time.seconds(25).toMilliseconds)
     env.getCheckpointConfig.setMaxConcurrentCheckpoints(1)
     env.getCheckpointConfig.setCheckpointInterval(Time.seconds(10).toMilliseconds)
-    env.setStateBackend(new RocksDBStateBackend(checkpointPath))
-    //env.setStateBackend(new FsStateBackend("file:///mnt/d/temp/checkpoint-data/", true))
+    env.setStateBackend(new RocksDBStateBackend(checkpointPath, true))
+    //env.setStateBackend(new FsStateBackend(checkpointPath, true))
     env.setParallelism(3)
     env.getConfig.setRestartStrategy(RestartStrategies.fixedDelayRestart(1, 6000))
     env.getCheckpointConfig.enableExternalizedCheckpoints(CheckpointConfig.ExternalizedCheckpointCleanup.RETAIN_ON_CANCELLATION)
