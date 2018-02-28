@@ -28,7 +28,7 @@ class StockGenerator(symbol: String, sigma: Double) extends SourceFunction[Stock
     while (!canceled) {
       price = price + Random.nextGaussian * sigma
       sourceContext.collect(StockPrice(symbol, price))
-      Thread.sleep(1000)
+      //Thread.sleep(1000)
     }
   }
 }
