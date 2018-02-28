@@ -75,7 +75,7 @@ object MyApp extends App {
     env.setStateBackend(new RocksDBStateBackend(checkpointPath, true))
     //env.setStateBackend(new FsStateBackend(checkpointPath, true))
     env.setParallelism(3)
-    env.getConfig.setRestartStrategy(RestartStrategies.fixedDelayRestart(1, 6000))
+    env.getConfig.setRestartStrategy(RestartStrategies.fixedDelayRestart(0, 6000))
     env.getCheckpointConfig.enableExternalizedCheckpoints(CheckpointConfig.ExternalizedCheckpointCleanup.RETAIN_ON_CANCELLATION)
     createGraph(env)
     env.execute("test")
